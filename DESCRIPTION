@@ -1,0 +1,24 @@
+Package: EpicaserAndBedOccupancyDashboard
+Type: Package
+Title: RAPIDE Epidemiological and Bed Occupancy Simulation Dashboard
+Version: 0.1.0
+Authors@R: person("Shakir", "Bilal",
+    email = "shakir.bilal@gmail.com",
+    role = c("aut", "cre"))
+Description: A Shiny dashboard using the epicaser and University of Twente's Short term bedoccupancy model engines to
+    simulate epidemic cases, age cohorts, hospital arrivals
+    and patient pathways, and predic bed occupancies, Lenght of Stays
+License: GPL-3
+Encoding: UTF-8
+Imports:
+    shiny,
+    bslib,
+    dplyr,
+    tidyr,
+    ggplot2,
+    DT,
+    epicaser,
+    processx,
+    jsonlite
+Remotes:
+    JimDuggan/epicaser
