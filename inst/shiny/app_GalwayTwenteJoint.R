@@ -80,7 +80,7 @@ curve <- function(data, x, y, group = NULL, title) {
 }
 
 ui <- page_sidebar(
-  title = "EpiCASER · Epidemic and hospital dashboard",
+  title = "EpiCASER-BedOccupy Epidemic and Bedoccupancy dashboard",
   theme = bs_theme(version = 5, bootswatch = "flatly"),
   sidebar = sidebar(width = 320,
                     radioButtons(
