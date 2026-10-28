@@ -19,6 +19,7 @@ plot_los <- function(data, department) {
     ) +
     ggplot2::geom_density(
       ggplot2::aes(y = ggplot2::after_stat(count)),
+      adjust = 2,
       colour = "steelblue",
       linewidth = 1,
       trim = TRUE
