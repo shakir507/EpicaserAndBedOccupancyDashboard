@@ -23,7 +23,7 @@ if (!requireNamespace("remotes", quietly = TRUE)) {
 
 # Install the dashboard and its required R packages
 remotes::install_github(
-  "shakir507/RapideEpicaserDashboard",
+  "shakir507/EpicaserAndBedOccupancyDashboard",
   dependencies = NA,
   upgrade = "never"
 )
