@@ -252,9 +252,9 @@ helpText(
   tags$br(),
   "exp: Takes average over last n days and extrapolates exponential growth from there",
   tags$br(),
-"flat: takes average over last n days and produces that as inflow rate for coming days",
+"flat: Takes average over last n days and produces that as inflow rate for coming days",
 tags$br(),
-"peak: doesn't work amazing, but still exists and is based on 'log' but expects more growth"),
+"peak: Is based on 'log' but expects more growth"),
 
       actionButton(
         "run_victor",
