@@ -199,35 +199,61 @@ ui <- page_sidebar(
     nav_panel(
       "Twente: Bed occupancy",
 
-      textInput(
-        "victor_project",
-        "Bed occupancy project folder",
-        value = "/Users/shakirbilal/Galwayprograms/AnylogicCodes/Models/RshinyDashboard/bed-occupancy-prediction-eph2026",
-        placeholder = "Full path to bed-occupancy-prediction-eph2026"
-      ),
+#       textInput(
+#         "victor_project",
+#         "Bed occupancy project folder",
+#         value = "/Users/shakirbilal/Galwayprograms/AnylogicCodes/Models/RshinyDashboard/bed-occupancy-prediction-eph2026",
+#         placeholder = "Full path to bed-occupancy-prediction-eph2026"
+#       ),
 
-      helpText(
-        "Enter the project folder containing bed-occupancy code's input and output folders."
-      ),
+#       helpText(
+#         "Enter the project folder containing bed-occupancy code's input and output folders."
+#       ),
 
-#      checkboxInput(
-#        "victor_auto_export",
-#        "Automatically save pathways to Victor's input folder",
-#        value = FALSE
-#      ),
+# #      checkboxInput(
+# #        "victor_auto_export",
+# #        "Automatically save pathways to Victor's input folder",
+# #        value = FALSE
+# #      ),
 
-      textInput(
-        "victor_venv",
-        "Python virtual environment (.venv) folder",
-        value = "/Users/shakirbilal/Galwayprograms/PythonEnvironments/bedoccupancy/.venv",
-        placeholder = "Full path to the .venv folder"
-      ),
+#       textInput(
+#         "victor_venv",
+#         "Python virtual environment (.venv) folder",
+#         value = "/Users/shakirbilal/Galwayprograms/PythonEnvironments/bedoccupancy/.venv",
+#         placeholder = "Full path to the .venv folder"
+#       ),
 
-      helpText(
-        "Enter the folder itself, not the Python executable.",
-        "macOS/Linux example: /home/username/environments/bedoccupancy/.venv",
-        "Windows example: C:/Users/username/environments/bedoccupancy/.venv"
-      ),
+#       helpText(
+#         "Enter the folder itself, not the Python executable.",
+#         "macOS/Linux example: /home/username/environments/bedoccupancy/.venv",
+#         "Windows example: C:/Users/username/environments/bedoccupancy/.venv"
+#       ),
+        textInput(
+          "victor_project",
+          "Bed occupancy project folder",
+          value = "",
+          placeholder = "Full path to bed-occupancy-prediction-eph2026"
+        ),
+
+        helpText(
+          "Enter the project folder containing the inputs and outputs folders."
+        ),
+
+        textInput(
+          "victor_venv",
+          "Python virtual environment (.venv) folder",
+          value = "",
+          placeholder = "Full path to the .venv folder"
+        ),
+
+        actionButton(
+          "victor_save_paths",
+          "Save paths"
+        ),
+
+        helpText(
+          "Saved paths will be restored automatically when you next open the dashboard."
+        ),
       dateInput(
         "victor_pred_date",
         "Prediction date",
@@ -334,6 +360,117 @@ server <- function(input, output, session) {
   completed_runs <- reactiveVal(list())
   status <- reactiveVal("Choose a starting point, then run the pipeline.")
   epicaser_ready <- reactiveVal(FALSE)
+# Configuration belongs to the local user, outside the installed package.
+victor_config_file <- file.path(
+  tools::R_user_dir(
+    "EpicaserAndBedOccupancyDashboard",
+    which = "config"
+  ),
+  "victor_paths.json"
+)
+
+
+# Restore saved paths once when the dashboard opens.
+observeEvent(TRUE, {
+  if (file.exists(victor_config_file)) {
+    tryCatch({
+      saved <- jsonlite::fromJSON(victor_config_file)
+
+      if (is.character(saved$project) &&
+          length(saved$project) == 1L &&
+          !is.na(saved$project)) {
+        updateTextInput(
+          session,
+          "victor_project",
+          value = saved$project
+        )
+      }
+
+      if (is.character(saved$venv) &&
+          length(saved$venv) == 1L &&
+          !is.na(saved$venv)) {
+        updateTextInput(
+          session,
+          "victor_venv",
+          value = saved$venv
+        )
+      }
+
+    }, error = function(e) {
+      showNotification(
+        "Saved paths could not be loaded. Enter and save them again.",
+        type = "warning"
+      )
+    })
+  }
+}, once = TRUE)
+
+
+# Save the paths when requested.
+observeEvent(input$victor_save_paths, {
+  tryCatch({
+    project_text <- trimws(input$victor_project)
+    venv_text <- trimws(input$victor_venv)
+
+    if (!nzchar(project_text) || !nzchar(venv_text)) {
+      stop("Enter both folder paths before saving.")
+    }
+
+    project <- normalizePath(
+      path.expand(project_text),
+      winslash = "/",
+      mustWork = TRUE
+    )
+
+    venv <- normalizePath(
+      path.expand(venv_text),
+      winslash = "/",
+      mustWork = TRUE
+    )
+
+    if (!dir.exists(project) || !dir.exists(venv)) {
+      stop("Both paths must point to folders.")
+    }
+
+    python <- if (.Platform$OS.type == "windows") {
+      file.path(venv, "Scripts", "python.exe")
+    } else {
+      file.path(venv, "bin", "python")
+    }
+
+    if (!file.exists(python)) {
+      stop("Python executable not found in the selected environment.")
+    }
+
+    dir.create(
+      dirname(victor_config_file),
+      recursive = TRUE,
+      showWarnings = FALSE
+    )
+
+    jsonlite::write_json(
+      list(project = project, venv = venv),
+      path = victor_config_file,
+      auto_unbox = TRUE,
+      pretty = TRUE
+    )
+
+    updateTextInput(session, "victor_project", value = project)
+    updateTextInput(session, "victor_venv", value = venv)
+
+    showNotification(
+      "Paths saved. They will be restored on future launches.",
+      type = "message"
+    )
+
+  }, error = function(e) {
+    showNotification(
+      conditionMessage(e),
+      type = "error",
+      duration = NULL
+    )
+  })
+})
   observeEvent(input$run, {
     # Clear previous results so an error cannot display stale outputs.
     epicaser_ready(FALSE)
