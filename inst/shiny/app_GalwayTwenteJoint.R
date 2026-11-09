@@ -191,6 +191,28 @@ ui <- page_sidebar(
         )
       )
     ),
+    nav_panel(
+      "Case/Hospital Assumptions",
+
+      fluidRow(
+        column(
+          12,
+          plotOutput("case_age_dist", height = "340px")
+        )
+      ),
+
+      tags$hr(),
+
+      fluidRow(
+        column(6, plotOutput("hospital_risk_dist", height = "340px")),
+        column(6, plotOutput("hospital_time_dist", height = "340px"))
+      ),
+
+      fluidRow(
+        column(6, plotOutput("hospital_source_dist", height = "340px")),
+        column(6, plotOutput("hospital_gender_dist", height = "340px"))
+      )
+    ),
     #nav_panel("Export / run details", verbatimTextOutput("details"),
     #                selectInput("export", "Dataset", c("NL pathways" = "pathways", "Joined hospital dataset" = "joined", "Deterministic output" = "deterministic", "Stochastic cases" = "cases", "Age cohorts" = "age", "Epidemiological case list" = "epi", "Hospital arrivals" = "arrivals")),
     #                downloadButton("download", "Download CSV"),
@@ -958,6 +980,19 @@ observeEvent(input$victor_save_paths, {
 #    chosen <- if (input$export %in% available) input$export else "cases"
 #    updateSelectInput(session, "export", choices = available, selected = chosen)
 #  })
+  hospital_distributions <-
+    EpicaserAndBedOccupancyDashboard::plot_hospital_distributions()
+  output$case_age_dist <- renderPlot(
+    {
+      print(hospital_distributions$age)
+    },
+    width = 650,
+    height = 340
+  )
+  output$hospital_risk_dist <- renderPlot(hospital_distributions$risk)
+  output$hospital_time_dist <- renderPlot(hospital_distributions$time)
+  output$hospital_source_dist <- renderPlot(hospital_distributions$source)
+  output$hospital_gender_dist <- renderPlot(hospital_distributions$gender)
   output$status <- renderText(status())
   output$total <- renderText({ if (is.null(result())) "—" else format(sum(result()$cases$Cases), big.mark = ",") })
   output$peak <- renderText({ if (is.null(result())) "—" else format(max(result()$cases$Cases), big.mark = ",") })

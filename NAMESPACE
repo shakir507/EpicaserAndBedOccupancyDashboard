@@ -1,3 +1,4 @@
 export(run_app)
 export(plot_los)
 export(plot_occupancy)
+export(plot_hospital_distributions)
