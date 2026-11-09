@@ -17,8 +17,22 @@ plot_hospital_distributions <- function(
     ggplot2::theme(
       panel.grid.major.x = ggplot2::element_blank(),
       panel.grid.minor = ggplot2::element_blank(),
-      axis.text = ggplot2::element_text(colour = "#222222"),
-      plot.title = ggplot2::element_text(face = "bold")
+
+      axis.line.x = ggplot2::element_line(colour = "#333333"),
+      axis.ticks.x = ggplot2::element_line(colour = "#333333"),
+      axis.ticks.length = grid::unit(3, "pt"),
+      axis.text.x = ggplot2::element_text(
+        colour = "#222222",
+        margin = ggplot2::margin(t = 5)
+      ),
+      axis.title.x = ggplot2::element_text(
+        colour = "#222222",
+        margin = ggplot2::margin(t = 8)
+      ),
+
+      axis.text.y = ggplot2::element_text(colour = "#222222"),
+      plot.title = ggplot2::element_text(face = "bold"),
+      plot.margin = ggplot2::margin(10, 12, 16, 12)
     )
 
   bar_plot <- function(labels, values, title, xlab, ylab,
