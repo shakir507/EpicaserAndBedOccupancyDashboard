@@ -149,17 +149,13 @@ ui <- page_sidebar(
                         dateInput(
                             inputId = "start_day",
                             label = "First date of simulation",
-                            value = "2026-11-01"
+                            value = "2026-12-01"
                           )
                     ),
                     conditionalPanel("input.source != 'stochastic'",
                                      selectInput("measurement", "Measurement model", c("Negative binomial" = "nb", "Poisson" = "poisson"))
                     ),
-                    # dateInput(
-                    #         inputId = "start_day",
-                    #         label = "First date of simulation",
-                    #         value = "2023-01-01"
-                    #       ),
+
                     numericInput("seed", "Random seed", 123, min = 0, max = 2147483647, step = 1),
                     checkboxInput("hospital", "Generate hospital arrivals and NL pathways", TRUE),
                     actionButton("run", "Run pipeline", class = "btn-primary"),
@@ -279,7 +275,7 @@ ui <- page_sidebar(
       dateInput(
         "victor_pred_date",
         "Prediction date",
-        value = as.Date("2027-01-04"),
+        value = as.Date("2027-02-04"),
         format = "yyyy-mm-dd"
       ),
 helpText(
@@ -312,9 +308,9 @@ tags$hr(),
 
 verbatimTextOutput("victor_status"),
 
-#tags$h4("Python execution log"),
+tags$h4("Python execution log"),
 
-#verbatimTextOutput("victor_log"),#unblock these for seeing python logs
+verbatimTextOutput("victor_log"),#unblock these for seeing python logs
 
 tags$hr(),
 
@@ -838,7 +834,8 @@ observeEvent(input$victor_save_paths, {
       victor_job(list(
         process = p,
         log_file = log_file,
-        result_file = result_file
+        result_file = result_file,
+        failure_log=file.path(output_dir, "pythonfailure.log")
       ))
 
     }, error = function(e) {
@@ -855,72 +852,158 @@ observeEvent(input$victor_save_paths, {
 
   # Check progress once per second without blocking Shiny.
   observe({
-    job <- victor_job()
-    req(!is.null(job))
+  job <- victor_job()
+  req(!is.null(job))
 
+  if (file.exists(job$log_file)) {
+    lines <- readLines(job$log_file, warn = FALSE)
+    victor_log(paste(tail(lines, 100), collapse = "\n"))
+  }
+
+  if (job$process$is_alive()) {
     invalidateLater(1000, session)
+    return(invisible(NULL))
+  }
 
-    if (file.exists(job$log_file)) {
-      lines <- readLines(job$log_file, warn = FALSE)
-      victor_log(paste(tail(lines, 100), collapse = "\n"))
+  # Python has stopped. Read the exit status before using it.
+  exit_status <- job$process$get_exit_status()
+  victor_job(NULL)
+
+  if (!isTRUE(exit_status == 0L)) {
+    code <- if (length(exit_status) == 1L && !is.na(exit_status)) {
+      as.character(exit_status)
+    } else {
+      "unknown"
     }
 
-    if (!job$process$is_alive()) {
-      exit_status <- job$process$get_exit_status()
-      victor_job(NULL)
+    failure_log <- file.path(dirname(job$result_file), "pythonfailure.log")
 
-      if (isTRUE(exit_status == 0L)) {
-        tryCatch({
-          if (!file.exists(job$result_file)) {
-            stop("Python completed but did not export the plotting data.")
-          }
+    saved <- file.exists(job$log_file) && isTRUE(file.copy(
+      from = job$log_file,
+      to = failure_log,
+      overwrite = TRUE
+    ))
 
-          data <- jsonlite::fromJSON(job$result_file)
+    victor_status(if (saved) {
+      sprintf("Python failed (exit status: %s). Log saved to: %s",
+              code, failure_log)
+    } else {
+      sprintf("Python failed (exit status: %s). Could not save the log.", code)
+    })
 
-          expected <- c(
-            "ward_los", "icu_los",
-            "ward_history", "icu_history",
-            "ward_forecast", "icu_forecast"
-          )
+    return(invisible(NULL))
+  }
 
-          if (!all(expected %in% names(data))) {
-            stop("The exported results are missing plotting datasets.")
-          }
+  tryCatch({
+    if (!file.exists(job$result_file)) {
+      stop("Python completed but did not export the plotting data.")
+    }
 
-          # These plots use daily dates; discard the timestamp component.
-          for (name in c(
-            "ward_history", "icu_history",
-            "ward_forecast", "icu_forecast"
-          )) {
-            if (!is.data.frame(data[[name]]) || !nrow(data[[name]])) {
-              stop("No plotting rows in: ", name)
-            }
+    data <- jsonlite::fromJSON(job$result_file)
 
-            dates <- as.Date(substr(data[[name]]$date, 1, 10))
+    expected <- c(
+      "ward_los", "icu_los",
+      "ward_history", "icu_history",
+      "ward_forecast", "icu_forecast"
+    )
 
-            if (anyNA(dates)) {
-              stop("Invalid plotting dates in: ", name)
-            }
+    if (!all(expected %in% names(data))) {
+      stop("The exported results are missing plotting datasets.")
+    }
 
-            data[[name]]$date <- dates
-            data[[name]] <- data[[name]][order(dates), , drop = FALSE]
-          }
-
-          victor_data(data)
-          victor_status("Prediction completed. Plots are ready.")
-
-        }, error = function(e) {
-          victor_data(NULL)
-          victor_status(
-            paste("Could not load results:", conditionMessage(e))
-          )
-        })
-
-      } else {
-        victor_status("Python failed. See the execution log.")
+    for (name in c(
+      "ward_history", "icu_history",
+      "ward_forecast", "icu_forecast"
+    )) {
+      if (!is.data.frame(data[[name]]) || !nrow(data[[name]])) {
+        stop("No plotting rows in: ", name)
       }
+
+      dates <- as.Date(substr(data[[name]]$date, 1, 10))
+
+      if (anyNA(dates)) {
+        stop("Invalid plotting dates in: ", name)
+      }
+
+      data[[name]]$date <- dates
+      data[[name]] <- data[[name]][order(dates), , drop = FALSE]
     }
+
+    victor_data(data)
+    victor_status("Prediction completed. Plots are ready.")
+
+  }, error = function(e) {
+    victor_data(NULL)
+    victor_status(paste("Could not load results:", conditionMessage(e)))
   })
+})
+  # observe({
+  #   job <- victor_job()
+  #   req(!is.null(job))
+
+  #   invalidateLater(1000, session)
+
+  #   if (file.exists(job$log_file)) {
+  #     lines <- readLines(job$log_file, warn = FALSE)
+  #     victor_log(paste(tail(lines, 100), collapse = "\n"))
+  #   }
+
+  #   if (!job$process$is_alive()) {
+  #     exit_status <- job$process$get_exit_status()
+  #     victor_job(NULL)
+
+  #     if (isTRUE(exit_status == 0L)) {
+  #       tryCatch({
+  #         if (!file.exists(job$result_file)) {
+  #           stop("Python completed but did not export the plotting data.")
+  #         }
+
+  #         data <- jsonlite::fromJSON(job$result_file)
+
+  #         expected <- c(
+  #           "ward_los", "icu_los",
+  #           "ward_history", "icu_history",
+  #           "ward_forecast", "icu_forecast"
+  #         )
+
+  #         if (!all(expected %in% names(data))) {
+  #           stop("The exported results are missing plotting datasets.")
+  #         }
+
+  #         # These plots use daily dates; discard the timestamp component.
+  #         for (name in c(
+  #           "ward_history", "icu_history",
+  #           "ward_forecast", "icu_forecast"
+  #         )) {
+  #           if (!is.data.frame(data[[name]]) || !nrow(data[[name]])) {
+  #             stop("No plotting rows in: ", name)
+  #           }
+
+  #           dates <- as.Date(substr(data[[name]]$date, 1, 10))
+
+  #           if (anyNA(dates)) {
+  #             stop("Invalid plotting dates in: ", name)
+  #           }
+
+  #           data[[name]]$date <- dates
+  #           data[[name]] <- data[[name]][order(dates), , drop = FALSE]
+  #         }
+
+  #         victor_data(data)
+  #         victor_status("Prediction completed. Plots are ready.")
+
+  #       }, error = function(e) {
+  #         victor_data(NULL)
+  #         victor_status(
+  #           paste("Could not load results:", conditionMessage(e))
+  #         )
+  #       })
+
+  #     } else {
+  #       victor_status("Python failed. See the execution log.")
+  #     }
+  #   }
+  # })
   output$victor_ward_los <- renderPlot({
     req(victor_data())
     EpicaserAndBedOccupancyDashboard::plot_los(
